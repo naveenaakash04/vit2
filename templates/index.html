@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ATLAS | Study Data Intelligence Agent</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">A</div>
+          <div>
+            <h1>ATLAS</h1>
+            <p>Study Data Intelligence Agent</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="nav-item active" data-target="dashboard">Dashboard</button>
+          <button class="nav-item" data-target="ask">Ask ATLAS</button>
+          <button class="nav-item" data-target="patient">Patient 360</button>
+          <button class="nav-item" data-target="overview">Data Overview</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <section id="dashboard" class="pane active">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h2>Study dashboard</h2>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card">
+              <span>Total subjects</span>
+              <strong id="total-subjects">--</strong>
+            </article>
+            <article class="stat-card">
+              <span>Total records</span>
+              <strong id="total-records">--</strong>
+            </article>
+            <article class="stat-card">
+              <span>Available tables</span>
+              <strong id="available-tables">--</strong>
+            </article>
+          </div>
+
+          <article class="panel">
+            <h3>Study overview</h3>
+            <p id="study-summary">
+              Loading study summary...
+            </p>
+          </article>
+
+          <article class="panel">
+            <h3>Data tables</h3>
+            <div id="table-list" class="table-list"></div>
+          </article>
+        </section>
+
+        <section id="ask" class="pane">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Ask ATLAS</p>
+              <h2>Natural-language questions</h2>
+            </div>
+          </div>
+
+          <div class="panel ask-panel">
+            <label for="question-input">Enter a question</label>
+            <div class="input-row">
+              <textarea id="question-input" rows="4" placeholder="Example: How many subjects are in the study?"></textarea>
+              <button id="ask-button" class="primary-button">Ask</button>
+            </div>
+
+            <div class="examples">
+              <span class="example-label">Try:</span>
+              <button class="example-button" data-question="How many subjects are in the study?">subjects</button>
+              <button class="example-button" data-question="What does the protocol say about Hy's law?">Hy's law</button>
+              <button class="example-button" data-question="Show records for 042-S01-001">subject lookup</button>
+              <button class="example-button" data-question="Is S07 a valid Hy's law site without conversion?">trap check</button>
+            </div>
+
+            <div id="ask-status" class="status hidden" aria-live="polite"></div>
+
+            <div id="answer-card" class="result-card hidden">
+              <div class="result-header">
+                <h3>Answer</h3>
+                <span id="answer-type" class="pill"></span>
+              </div>
+              <div id="answer-value" class="answer-value"></div>
+              <p id="answer-explanation" class="answer-explanation"></p>
+            </div>
+
+            <div id="evidence-card" class="evidence-card hidden">
+              <h3>Evidence</h3>
+              <ul id="evidence-list" class="evidence-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="patient" class="pane">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Patient 360</p>
+              <h2>Subject profile</h2>
+            </div>
+          </div>
+
+          <div class="panel patient-panel">
+            <div class="input-row compact">
+              <input id="patient-input" type="text" placeholder="Enter subject ID, e.g. 042-S01-001" />
+              <button id="patient-button" class="primary-button">Load</button>
+            </div>
+
+            <div id="patient-status" class="status hidden" aria-live="polite"></div>
+
+            <div id="patient-card" class="result-card hidden">
+              <h3 id="patient-header">Subject</h3>
+              <div id="patient-demographics" class="demographic-grid"></div>
+              <div id="patient-records" class="record-groups"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="overview" class="pane">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Data</p>
+              <h2>Source table overview</h2>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div id="data-overview-list" class="data-overview-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
