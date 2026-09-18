@@ -54,6 +54,50 @@ def test_missing_subject_is_admitted(graph):
     assert answer.question_type == 'lookup'
 
 
+def test_short_site_candidate_is_resolved_to_real_site_records(graph):
+    atlas = Atlas(graph)
+    answer = atlas.answer({'question': 'Show me the Patient 360 summary for S07, with source records.'})
+    assert answer.question_type == 'lookup'
+    assert answer.answer != []
+    assert answer.answer['usubjid'] == 'S07'
+    assert answer.answer['found'] is True
+    assert answer.answer['site'] == 'S07'
+    assert answer.answer['subject_count'] > 0
+    assert answer.answer['total_matching_records'] > 0
+    assert 'Site S07 contains' in answer.explanation
+
+
+def test_full_subject_id_lookup_with_source_records(graph):
+    atlas = Atlas(graph)
+    answer = atlas.answer({'question': 'Patient 360 summary for 042-S02-001 with source records.'})
+    assert answer.question_type == 'lookup'
+    assert answer.answer['usubjid'] == '042-S02-001'
+    assert answer.answer['found'] is True
+    assert answer.answer['total_matching_records'] > 0
+    assert answer.answer['source_tables']
+
+
+def test_unknown_subject_id_is_reported_cleanly(graph):
+    atlas = Atlas(graph)
+    answer = atlas.answer({'question': 'Please show patient 360 for 042-S99-999 with source records.'})
+    assert answer.question_type == 'lookup'
+    assert answer.answer['found'] is False
+    assert answer.answer['usubjid'] == '042-S99-999'
+    assert 'No matching subject ID 042-S99-999' in answer.explanation
+
+
+def test_short_subject_id_variants_are_recognized(graph):
+    atlas = Atlas(graph)
+    for question in [
+        'Show records for 042-S01-001',
+        'Patient 360 summary for 042-S01-001',
+        'show me the source records for 042-S01-001',
+    ]:
+        answer = atlas.answer({'question': question})
+        assert answer.question_type == 'lookup'
+        assert answer.answer['usubjid'] == '042-S01-001'
+
+
 def test_cli_export_smoke(tmp_path):
     from pathlib import Path
     import subprocess, sys

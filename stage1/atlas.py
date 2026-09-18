@@ -302,8 +302,29 @@ class Atlas:
         sid = q.get("usubjid") or q.get("subject")
         if sid:
             return str(sid)
-        match = re.search(r"\b\d{3}-S\d{2}-\d{3}\b", text, re.I)
-        return match.group(0) if match else None
+
+        matches = []
+        for pattern in [r"\b\d{3}-S\d{2}-\d{3}\b", r"\bS\d{2}\b"]:
+            matches.extend(re.findall(pattern, text, re.I))
+
+        if not matches:
+            return None
+
+        candidates = []
+        for candidate in matches:
+            value = str(candidate).upper()
+            candidates.append(value)
+            if value in self.graph.subjects:
+                return value
+
+        direct = candidates[0].upper()
+        if re.fullmatch(r"\d{3}-S\d{2}-\d{3}", direct):
+            return direct
+        if re.fullmatch(r"S\d{2}", direct):
+            site_code = direct
+            if any(str(subject_id).startswith(f"042-{site_code}-") for subject_id in self.graph.subjects):
+                return site_code
+        return direct
 
     def _site(self, q, text):
         site = q.get("site")
@@ -387,59 +408,93 @@ class Atlas:
         sid = self._subject(q, text)
         if not sid:
             return self._answer([], "No subject ID was identified in the question; evidence cannot be tied to a specific patient.", [], 0.2, "lookup")
-        payload = self.graph.patient360(sid)
-        if not payload["found"]:
-            return self._answer({"usubjid": sid, "found": False, "total_matching_records": 0, "source_tables": [], "preview_records": []}, f"Subject {sid} was not found in the study graph.", [], 0.1, "lookup")
 
-        domain = self._domain(q, text)
-        domains = [domain] if domain else list(DOMAINS)
-        matching = []
-        for d in domains:
-            for node in self.graph.records(d, sid):
-                matching.append(self._ref(node))
+        if sid in self.graph.subjects:
+            payload = self.graph.patient360(sid)
+            domain = self._domain(q, text)
+            domains = [domain] if domain else list(DOMAINS)
+            matching = []
+            for d in domains:
+                for node in self.graph.records(d, sid):
+                    matching.append(self._ref(node))
 
-        preview = []
-        for item in matching:
-            row = item["record"]
-            date = get_first(row, "AESTDTC", "LBDTC", "EXSTDTC", "CMSTDTC", "DSSTDTC", "MHSTDTC", "EGDTC", "VSDTC", "RFSTDTC", "DMDTC", "VISITDTC")
-            value = None
-            label = None
-            for label_key, value_key in [("LBTESTCD", "LBORRES"), ("LBTEST", "LBORRES"), ("VSORRES", "VSORRES"), ("EXDOSE", "EXDOSE"), ("AETERM", "AETERM"), ("CMTRT", "CMTRT"), ("MHTERM", "MHTERM"), ("EGTESTCD", "EGTESTCD"), ("DSDECOD", "DSDECOD"), ("ARM", "ARM")]:
-                if label_key in row or value_key in row:
-                    label = get_first(row, label_key)
-                    value = get_first(row, value_key)
-                    break
-            if value is None:
-                for key, val in row.items():
-                    if val is None or str(val).strip() == "":
-                        continue
-                    if key.lower().endswith("dtc") or key.lower().endswith("date"):
-                        continue
-                    value = val
-                    label = key
-                    break
-            preview.append({
-                "domain": item["domain"],
-                "source_table": item["source_table"],
-                "record_id": item["record_id"],
-                "seq": item["seq"],
-                "date": date,
-                "label": label,
-                "value": value,
-            })
+            preview = []
+            for item in matching:
+                row = item["record"]
+                date = get_first(row, "AESTDTC", "LBDTC", "EXSTDTC", "CMSTDTC", "DSSTDTC", "MHSTDTC", "EGDTC", "VSDTC", "RFSTDTC", "DMDTC", "VISITDTC")
+                value = None
+                label = None
+                for label_key, value_key in [("LBTESTCD", "LBORRES"), ("LBTEST", "LBORRES"), ("VSORRES", "VSORRES"), ("EXDOSE", "EXDOSE"), ("AETERM", "AETERM"), ("CMTRT", "CMTRT"), ("MHTERM", "MHTERM"), ("EGTESTCD", "EGTESTCD"), ("DSDECOD", "DSDECOD"), ("ARM", "ARM")]:
+                    if label_key in row or value_key in row:
+                        label = get_first(row, label_key)
+                        value = get_first(row, value_key)
+                        break
+                if value is None:
+                    for key, val in row.items():
+                        if val is None or str(val).strip() == "":
+                            continue
+                        if key.lower().endswith("dtc") or key.lower().endswith("date"):
+                            continue
+                        value = val
+                        label = key
+                        break
+                preview.append({
+                    "domain": item["domain"],
+                    "source_table": item["source_table"],
+                    "record_id": item["record_id"],
+                    "seq": item["seq"],
+                    "date": date,
+                    "label": label,
+                    "value": value,
+                })
 
-        summary = {
-            "usubjid": sid,
-            "found": True,
-            "total_matching_records": len(matching),
-            "source_tables": sorted({record["source_table"] for record in matching}),
-            "preview_records": preview[:10],
-            "all_records": matching,
-            "demographics": payload["demographics"],
-            "record_counts": {d: len(payload["records"].get(d, [])) for d in DOMAINS if d in payload["records"]},
-        }
-        compact = f"{sid}: {len(matching)} records across {len(summary['source_tables'])} tables."
-        return self._answer(summary, compact, matching, 0.85, "lookup")
+            summary = {
+                "usubjid": sid,
+                "found": True,
+                "total_matching_records": len(matching),
+                "source_tables": sorted({record["source_table"] for record in matching}),
+                "preview_records": preview[:10],
+                "all_records": matching,
+                "demographics": payload["demographics"],
+                "record_counts": {d: len(payload["records"].get(d, [])) for d in DOMAINS if d in payload["records"]},
+            }
+            compact = f"{sid}: {len(matching)} records across {len(summary['source_tables'])} tables."
+            return self._answer(summary, compact, matching, 0.85, "lookup")
+
+        site_match = re.fullmatch(r"S\d{2}", str(sid).upper())
+        if site_match:
+            related_subjects = sorted({node["usubjid"] for node in self.graph.nodes if str(node["usubjid"]).startswith(f"042-{sid.upper()}-")})
+            if related_subjects:
+                related_records = []
+                for subject_id in related_subjects:
+                    for domain in DOMAINS:
+                        for node in self.graph.records(domain, subject_id):
+                            related_records.append(self._ref(node))
+                summary = {
+                    "usubjid": sid,
+                    "found": True,
+                    "site": sid.upper(),
+                    "related_subjects": related_subjects[:10],
+                    "subject_count": len(related_subjects),
+                    "total_matching_records": len(related_records),
+                    "source_tables": sorted({record["source_table"] for record in related_records}),
+                    "preview_records": [
+                        {
+                            "usubjid": item["usubjid"],
+                            "domain": item["domain"],
+                            "source_table": item["source_table"],
+                            "record_id": item["record_id"],
+                            "seq": item["seq"],
+                            "value": get_first(item["record"], "LBORRES", "VSORRES", "EXDOSE", "CMTRT", "AETERM", "MHTERM", "DSDECOD", "ARM"),
+                        }
+                        for item in related_records[:10]
+                    ],
+                    "all_records": related_records,
+                }
+                explanation = f"Site {sid.upper()} contains {len(related_subjects)} subject(s) and {len(related_records)} records across {len(summary['source_tables'])} source tables."
+                return self._answer(summary, explanation, related_records[:25], 0.8, "lookup")
+
+        return self._answer({"usubjid": sid, "found": False, "total_matching_records": 0, "source_tables": [], "preview_records": []}, f"No matching subject ID {sid} was found in the study graph.", [], 0.1, "lookup")
 
     def _extract_lab_test(self, text):
         text_upper = text.upper()
