@@ -64,3 +64,4 @@ def test_cli_export_smoke(tmp_path):
     payload = json.loads((root / 'graph_stats.json').read_text(encoding='utf-8'))
     assert payload['subjects'] == 241
     assert 'How many subjects' not in result.stdout or 'subjects' in result.stdout
+

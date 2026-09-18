@@ -52,26 +52,74 @@ function renderAnswer(data) {
   const answerType = document.getElementById('answer-type');
   const evidenceList = document.getElementById('evidence-list');
 
+  const directAnswer = data.direct_answer ?? data.answer ?? 'No answer available';
+  const explanation = data.explanation || 'No explanation returned.';
+  const limitations = data.limitations || '';
+  const evidence = Array.isArray(data.supporting_evidence) ? data.supporting_evidence : (Array.isArray(data.evidence) ? data.evidence : []);
+
+  let summaryText = formatAnswerValue(directAnswer);
+  if (directAnswer && typeof directAnswer === 'object' && directAnswer.total_matching_records !== undefined) {
+    summaryText = `${directAnswer.usubjid} • ${directAnswer.total_matching_records} records • ${directAnswer.source_tables.join(', ')}`;
+  }
+
   answerType.textContent = data.question_type || 'unknown';
-  answerValue.textContent = formatAnswerValue(data.answer);
-  answerExplanation.textContent = data.explanation || 'No explanation returned.';
+  answerValue.textContent = summaryText;
+  const shortExplanation = explanation && explanation.includes(':') ? explanation.split(':').slice(1).join(':').trim() : explanation;
+  answerExplanation.innerHTML = `<strong>Summary:</strong> ${escapeHtml(shortExplanation || 'No extra detail.')}${limitations ? `<br><br><strong>Note:</strong> ${escapeHtml(limitations)}` : ''}`;
   card.classList.remove('hidden');
 
+  const toggleContainer = document.getElementById('lookup-toggle-container');
+  if (toggleContainer) toggleContainer.remove();
+
+  if (directAnswer && typeof directAnswer === 'object' && Array.isArray(directAnswer.preview_records)) {
+    const container = document.createElement('div');
+    container.id = 'lookup-toggle-container';
+    container.style.marginTop = '18px';
+    const button = document.createElement('button');
+    button.className = 'primary-button';
+    button.style.height = '38px';
+    button.style.minWidth = '150px';
+    button.textContent = 'Show all records';
+    const details = document.createElement('div');
+    details.className = 'hidden';
+    details.style.marginTop = '12px';
+    details.style.maxHeight = '300px';
+    details.style.overflow = 'auto';
+    details.style.border = '1px solid var(--border)';
+    details.style.borderRadius = '12px';
+    details.style.padding = '12px';
+    details.style.background = 'var(--panel-alt)';
+    const rows = directAnswer.preview_records.map((record) => {
+      const datePart = record.date ? ` • ${record.date}` : '';
+      const labelPart = record.label ? ` • ${record.label}` : '';
+      const valuePart = record.value !== undefined && record.value !== null ? ` • ${record.value}` : '';
+      return `<div style="padding:8px 0; border-bottom:1px solid var(--border);"><strong>${escapeHtml(record.domain)}</strong>${escapeHtml(datePart + labelPart + valuePart)}<br><small>${escapeHtml(record.source_table)} • ${escapeHtml(record.record_id)}</small></div>`;
+    }).join('');
+    details.innerHTML = rows || '<div>No record previews available.</div>';
+    button.addEventListener('click', () => {
+      details.classList.toggle('hidden');
+      button.textContent = details.classList.contains('hidden') ? 'Show all records' : 'Hide all records';
+    });
+    container.appendChild(button);
+    container.appendChild(details);
+    card.appendChild(container);
+  }
+
   evidenceList.innerHTML = '';
-  if (Array.isArray(data.evidence) && data.evidence.length > 0) {
-    data.evidence.forEach((item) => {
+  if (evidence.length > 0) {
+    evidence.forEach((item) => {
       const li = document.createElement('li');
       li.className = 'evidence-item';
       const recordId = item.record_id || item.record?.id || 'record';
-      const table = item.source_table || item.domain ? `${item.domain || 'source'}.csv` : 'source table';
+      const table = item.source_table || (item.domain ? `${item.domain}.csv` : 'source table');
       const subject = item.usubjid || item.record?.USUBJID || 'unknown';
       const seq = item.seq || item.record?.SEQ || item.record?.LBSEQ || item.record?.AESEQ || 'n/a';
       li.innerHTML = `
         <strong>${subject}</strong>
         <div class="evidence-meta">
-          Source table: ${table}<br />
-          Record ID: ${recordId}<br />
-          Sequence: ${seq}
+          Source table: ${escapeHtml(table)}<br />
+          Record ID: ${escapeHtml(recordId)}<br />
+          Sequence: ${escapeHtml(seq)}
         </div>
       `;
       evidenceList.appendChild(li);
@@ -80,6 +128,15 @@ function renderAnswer(data) {
   } else {
     evidenceCard.classList.add('hidden');
   }
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function formatAnswerValue(value) {

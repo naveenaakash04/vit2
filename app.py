@@ -49,12 +49,23 @@ def ask_atlas():
 
     try:
         answer = ATLAS.answer({"question": question})
+        direct_answer = answer.answer if not isinstance(answer.answer, (dict, list)) else answer.answer
+        evidence = answer.evidence or []
+        limitations = None
+        if not evidence:
+            limitations = "Evidence is insufficient or absent in the supplied study data; no patient fact or protocol rule was inferred beyond the records available."
+        elif answer.question_type in {"trap", "protocol"}:
+            limitations = "The answer is limited to study-document and source-record evidence; no external adjudication or monitor guidance was assumed."
+
         return jsonify({
             "question_type": answer.question_type,
             "confidence": answer.confidence,
-            "answer": answer.answer,
+            "direct_answer": direct_answer,
+            "answer": direct_answer,
             "explanation": answer.explanation,
-            "evidence": answer.evidence,
+            "supporting_evidence": evidence,
+            "evidence": evidence,
+            "limitations": limitations,
         })
     except Exception as exc:  # pragma: no cover - runtime guard for UI
         return jsonify({"error": "The ATLAS backend could not process the request.", "details": str(exc)}), 500

@@ -280,6 +280,24 @@ class Atlas:
     def _text(self, q):
         return str(q.get("text") or q.get("question") or "").strip()
 
+    def _direct_answer(self, answer_value):
+        if isinstance(answer_value, dict):
+            if "usubjid" in answer_value:
+                return answer_value.get("usubjid")
+            if "answer" in answer_value and isinstance(answer_value["answer"], (int, float, str, list, dict)):
+                return answer_value["answer"]
+            return answer_value
+        if isinstance(answer_value, list):
+            return answer_value[:5]
+        return answer_value
+
+    def _limitations_for(self, evidence, explanation, question_type):
+        if question_type in {"trap", "protocol"}:
+            return "The answer is limited to study-document and source-record evidence; no external adjudication or monitor guidance was assumed."
+        if not evidence:
+            return "Evidence is insufficient or absent in the supplied study data; no patient fact or protocol rule was inferred beyond the records available."
+        return None
+
     def _subject(self, q, text):
         sid = q.get("usubjid") or q.get("subject")
         if sid:
@@ -371,7 +389,7 @@ class Atlas:
             return self._answer([], "No subject ID was identified in the question; evidence cannot be tied to a specific patient.", [], 0.2, "lookup")
         payload = self.graph.patient360(sid)
         if not payload["found"]:
-            return self._answer({"usubjid": sid, "found": False}, f"Subject {sid} was not found in the study graph.", [], 0.1, "lookup")
+            return self._answer({"usubjid": sid, "found": False, "total_matching_records": 0, "source_tables": [], "preview_records": []}, f"Subject {sid} was not found in the study graph.", [], 0.1, "lookup")
 
         domain = self._domain(q, text)
         domains = [domain] if domain else list(DOMAINS)
@@ -380,13 +398,48 @@ class Atlas:
             for node in self.graph.records(d, sid):
                 matching.append(self._ref(node))
 
+        preview = []
+        for item in matching:
+            row = item["record"]
+            date = get_first(row, "AESTDTC", "LBDTC", "EXSTDTC", "CMSTDTC", "DSSTDTC", "MHSTDTC", "EGDTC", "VSDTC", "RFSTDTC", "DMDTC", "VISITDTC")
+            value = None
+            label = None
+            for label_key, value_key in [("LBTESTCD", "LBORRES"), ("LBTEST", "LBORRES"), ("VSORRES", "VSORRES"), ("EXDOSE", "EXDOSE"), ("AETERM", "AETERM"), ("CMTRT", "CMTRT"), ("MHTERM", "MHTERM"), ("EGTESTCD", "EGTESTCD"), ("DSDECOD", "DSDECOD"), ("ARM", "ARM")]:
+                if label_key in row or value_key in row:
+                    label = get_first(row, label_key)
+                    value = get_first(row, value_key)
+                    break
+            if value is None:
+                for key, val in row.items():
+                    if val is None or str(val).strip() == "":
+                        continue
+                    if key.lower().endswith("dtc") or key.lower().endswith("date"):
+                        continue
+                    value = val
+                    label = key
+                    break
+            preview.append({
+                "domain": item["domain"],
+                "source_table": item["source_table"],
+                "record_id": item["record_id"],
+                "seq": item["seq"],
+                "date": date,
+                "label": label,
+                "value": value,
+            })
+
         summary = {
             "usubjid": sid,
+            "found": True,
+            "total_matching_records": len(matching),
+            "source_tables": sorted({record["source_table"] for record in matching}),
+            "preview_records": preview[:10],
+            "all_records": matching,
             "demographics": payload["demographics"],
             "record_counts": {d: len(payload["records"].get(d, [])) for d in DOMAINS if d in payload["records"]},
-            "matched_records": matching,
         }
-        return self._answer(summary, f"Subject {sid} was found with demographic data and {len(matching)} matching record(s) in the selected domain set.", matching, 0.85, "lookup")
+        compact = f"{sid}: {len(matching)} records across {len(summary['source_tables'])} tables."
+        return self._answer(summary, compact, matching, 0.85, "lookup")
 
     def _extract_lab_test(self, text):
         text_upper = text.upper()
@@ -461,37 +514,51 @@ class Atlas:
             return self._answer({"issue": "Conflicting evidence detected"}, "The source data and protocol rules must be reconciled. Where the data are inconsistent or the record is from an excluded site, the agent should report the issue instead of guessing.", [], 0.4, "trap")
         return self._answer([], "No validated trap indicator was found in the available source data or protocol guidance.", [], 0.2, "trap")
 
+    def _infer_question_type(self, text):
+        lower = text.lower()
+        if any(w in lower for w in ("trap", "misleading", "conflict", "wrong dose", "contradict", "site s07", "site s03", "without conversion", "invalid hy", "excluded site", "should not", "must not")):
+            return "trap"
+        if any(w in lower for w in ("how many", "count", "number of", "how much", "total subjects", "total records")):
+            return "count"
+        if any(w in lower for w in ("trend", "increase", "decrease", "change over time", "over time", "lab result", "alt", "ast", "bili", "bilirubin", "result for")):
+            return "trend"
+        if any(w in lower for w in ("hy's law", "hys law", "protocol", "visit window", "dose", "dosing", "serious", "safety", "amendment", "version")):
+            return "protocol"
+        if re.search(r"\b\d{3}-S\d{2}-\d{3}\b", text, re.I) or re.search(r"\b(?:patient|subject|demographics|records|360)\b", lower):
+            return "lookup"
+        return "lookup"
+
     def answer(self, question):
         q = self._question_dict(question)
         text = self._text(q)
         if not text:
             return self._answer([], "No question text was provided.", [], 0.0, "unknown")
         qtype = str(q.get("question_type") or q.get("type") or "").lower()
-        lower = text.lower()
         if not qtype:
-            if any(w in lower for w in ("trap", "misleading", "conflict", "wrong dose", "contradict", "site s07", "site s03", "without conversion", "invalid hy", "excluded site")):
-                qtype = "trap"
-            elif any(w in lower for w in ("how many", "count", "number of", "how much")):
-                qtype = "count"
-            elif any(w in lower for w in ("trend", "increase", "decrease", "change over time", "over time")):
-                qtype = "trend"
-            elif any(w in lower for w in ("hy's law", "hys law", "protocol", "visit window", "dose", "serious", "safety")):
-                qtype = "protocol"
-            elif re.search(r"\b\d{3}-S\d{2}-\d{3}\b", text, re.I) or re.search(r"\b(?:patient|subject)\b", lower):
-                qtype = "lookup"
-            else:
-                qtype = "lookup"
+            qtype = self._infer_question_type(text)
 
         if qtype == "count":
-            return self._count(q, text)
+            result = self._count(q, text)
+            result.answer = self._direct_answer(result.answer)
+            result.evidence = result.evidence or []
+            result.explanation = result.explanation + (" " if result.explanation else "") + ("Evidence: " + str(len(result.evidence)) + " supporting record(s)." if result.evidence else "Evidence was insufficient to support a record-level count.")
+            return result
         if qtype == "lookup":
             return self._lookup(q, text)
         if qtype == "trend":
-            return self._answer_trend(text)
+            result = self._answer_trend(text)
+            result.answer = self._direct_answer(result.answer)
+            if result.answer is not None and isinstance(result.answer, dict):
+                result.answer = {"summary": result.answer}
+            return result
         if qtype in {"protocol", "rule", "interpretation"}:
-            return self._answer_protocol(text)
+            result = self._answer_protocol(text)
+            result.answer = self._direct_answer(result.answer)
+            return result
         if qtype == "trap":
-            return self._answer_trap(text)
+            result = self._answer_trap(text)
+            result.answer = self._direct_answer(result.answer)
+            return result
         return self._answer([], "The question type could not be mapped to a supported ATLAS query pattern.", [], 0.1, "unknown")
 
 
