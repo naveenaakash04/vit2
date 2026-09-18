@@ -54,17 +54,16 @@ def test_missing_subject_is_admitted(graph):
     assert answer.question_type == 'lookup'
 
 
-def test_short_site_candidate_is_resolved_to_real_site_records(graph):
+def test_short_site_candidate_is_not_mistaken_for_a_subject(graph):
     atlas = Atlas(graph)
     answer = atlas.answer({'question': 'Show me the Patient 360 summary for S07, with source records.'})
     assert answer.question_type == 'lookup'
     assert answer.answer != []
     assert answer.answer['usubjid'] == 'S07'
-    assert answer.answer['found'] is True
-    assert answer.answer['site'] == 'S07'
+    assert answer.answer['found'] is False
+    assert answer.answer['site_code'] == 'S07'
     assert answer.answer['subject_count'] > 0
-    assert answer.answer['total_matching_records'] > 0
-    assert 'Site S07 contains' in answer.explanation
+    assert 'No matching subject ID S07' in answer.explanation
 
 
 def test_full_subject_id_lookup_with_source_records(graph):

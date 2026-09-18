@@ -1,7 +1,7 @@
 # ATLAS Project
 
 ## Overview
-ATLAS is a subject-centric study intelligence project that builds a graph over the study data, answers natural-language questions with evidence, and exposes a simple dashboard for operational review. The implementation uses the real project data in `hackathon-data/data`, keeps all agent logic grounded in source records, and supports patient lookup, count queries, protocol interpretation, and trap detection without guessing.
+ATLAS is a subject-centric study intelligence project that builds a graph over the study data, answers natural-language questions with evidence, and exposes a real data dashboard with interactive visual analytics for operational review. The implementation uses the real project data in `hackathon-data/data`, keeps all agent logic grounded in source records, and supports patient lookup, count queries, protocol interpretation, trap detection, and interactive charting without guessing.
 
 ## Architecture
 - `stage1/atlas.py`: core graph builder and natural-language question-answering agent.
@@ -47,6 +47,17 @@ Then open:
 ```text
 http://127.0.0.1:5000
 ```
+
+## Interactive visual analytics
+The dashboard now includes real-data visuals generated from the live graph and source records:
+- KPI cards for subject count, record count, and available table count
+- Bar chart for record counts by source table
+- Line chart for records over time when date values are present
+- Doughnut chart for data category mix
+- Patient 360 timeline, lab, and vital-sign charts with date/category filtering
+- Agent answer chart rendering for supported count and trend-style questions
+
+All chart values are calculated from the same graph and study CSV records used by the backend agent; they are not mock values.
 
 ## API examples
 

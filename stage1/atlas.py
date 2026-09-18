@@ -321,9 +321,7 @@ class Atlas:
         if re.fullmatch(r"\d{3}-S\d{2}-\d{3}", direct):
             return direct
         if re.fullmatch(r"S\d{2}", direct):
-            site_code = direct
-            if any(str(subject_id).startswith(f"042-{site_code}-") for subject_id in self.graph.subjects):
-                return site_code
+            return direct
         return direct
 
     def _site(self, q, text):
@@ -462,37 +460,38 @@ class Atlas:
             return self._answer(summary, compact, matching, 0.85, "lookup")
 
         site_match = re.fullmatch(r"S\d{2}", str(sid).upper())
+        related_subjects = []
         if site_match:
             related_subjects = sorted({node["usubjid"] for node in self.graph.nodes if str(node["usubjid"]).startswith(f"042-{sid.upper()}-")})
-            if related_subjects:
-                related_records = []
-                for subject_id in related_subjects:
-                    for domain in DOMAINS:
-                        for node in self.graph.records(domain, subject_id):
-                            related_records.append(self._ref(node))
-                summary = {
-                    "usubjid": sid,
-                    "found": True,
-                    "site": sid.upper(),
-                    "related_subjects": related_subjects[:10],
-                    "subject_count": len(related_subjects),
-                    "total_matching_records": len(related_records),
-                    "source_tables": sorted({record["source_table"] for record in related_records}),
-                    "preview_records": [
-                        {
-                            "usubjid": item["usubjid"],
-                            "domain": item["domain"],
-                            "source_table": item["source_table"],
-                            "record_id": item["record_id"],
-                            "seq": item["seq"],
-                            "value": get_first(item["record"], "LBORRES", "VSORRES", "EXDOSE", "CMTRT", "AETERM", "MHTERM", "DSDECOD", "ARM"),
-                        }
-                        for item in related_records[:10]
-                    ],
-                    "all_records": related_records,
-                }
-                explanation = f"Site {sid.upper()} contains {len(related_subjects)} subject(s) and {len(related_records)} records across {len(summary['source_tables'])} source tables."
-                return self._answer(summary, explanation, related_records[:25], 0.8, "lookup")
+
+        if site_match and related_subjects:
+            related_records = []
+            for subject_id in related_subjects:
+                for domain in DOMAINS:
+                    for node in self.graph.records(domain, subject_id):
+                        related_records.append(self._ref(node))
+            summary = {
+                "usubjid": sid,
+                "found": False,
+                "site_code": sid.upper(),
+                "related_subjects": related_subjects[:10],
+                "subject_count": len(related_subjects),
+                "source_tables": sorted({record["source_table"] for record in related_records}),
+                "preview_records": [
+                    {
+                        "usubjid": item["usubjid"],
+                        "domain": item["domain"],
+                        "source_table": item["source_table"],
+                        "record_id": item["record_id"],
+                        "seq": item["seq"],
+                        "value": get_first(item["record"], "LBORRES", "VSORRES", "EXDOSE", "CMTRT", "AETERM", "MHTERM", "DSDECOD", "ARM"),
+                    }
+                    for item in related_records[:10]
+                ],
+                "all_records": related_records,
+            }
+            explanation = f"No matching subject ID {sid} was found in the study graph. {sid.upper()} is a site code with {len(related_subjects)} subject(s), including {', '.join(related_subjects[:3])}."
+            return self._answer(summary, explanation, related_records[:25], 0.6, "lookup")
 
         return self._answer({"usubjid": sid, "found": False, "total_matching_records": 0, "source_tables": [], "preview_records": []}, f"No matching subject ID {sid} was found in the study graph.", [], 0.1, "lookup")
 

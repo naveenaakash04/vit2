@@ -21,6 +21,9 @@
           <button class="nav-item active" data-target="dashboard">Dashboard</button>
           <button class="nav-item" data-target="ask">Ask ATLAS</button>
           <button class="nav-item" data-target="patient">Patient 360</button>
+          <button class="nav-item" data-target="graph">Graph Visualization</button>
+          <button class="nav-item" data-target="risk-prediction">Risk Prediction</button>
+          <button class="nav-item" data-target="risk-replay">Risk Replay</button>
           <button class="nav-item" data-target="overview">Data Overview</button>
         </nav>
       </aside>
@@ -51,10 +54,23 @@
 
           <article class="panel">
             <h3>Study overview</h3>
-            <p id="study-summary">
-              Loading study summary...
-            </p>
+            <p id="study-summary">Loading study summary...</p>
           </article>
+
+          <div class="chart-grid">
+            <article class="panel chart-card">
+              <h3>Records by source table</h3>
+              <canvas id="table-chart" height="180"></canvas>
+            </article>
+            <article class="panel chart-card">
+              <h3>Records over time</h3>
+              <canvas id="time-chart" height="180"></canvas>
+            </article>
+            <article class="panel chart-card">
+              <h3>Data categories</h3>
+              <canvas id="category-chart" height="180"></canvas>
+            </article>
+          </div>
 
           <article class="panel">
             <h3>Data tables</h3>
@@ -96,6 +112,11 @@
               <p id="answer-explanation" class="answer-explanation"></p>
             </div>
 
+            <div id="answer-visualization" class="panel chart-card hidden">
+              <h3>Visualization</h3>
+              <canvas id="answer-chart" height="200"></canvas>
+            </div>
+
             <div id="evidence-card" class="evidence-card hidden">
               <h3>Evidence</h3>
               <ul id="evidence-list" class="evidence-list"></ul>
@@ -117,12 +138,139 @@
               <button id="patient-button" class="primary-button">Load</button>
             </div>
 
+            <div class="filter-row">
+              <label>
+                From
+                <input id="date-from" type="date" />
+              </label>
+              <label>
+                To
+                <input id="date-to" type="date" />
+              </label>
+              <label>
+                Category
+                <select id="category-filter">
+                  <option value="all">All records</option>
+                  <option value="DM">Demographics</option>
+                  <option value="AE">Adverse events</option>
+                  <option value="LB">Laboratory</option>
+                  <option value="VS">Vital signs</option>
+                  <option value="EX">Exposure</option>
+                  <option value="CM">Concomitant meds</option>
+                  <option value="DS">Disposition</option>
+                  <option value="MH">Medical history</option>
+                  <option value="EG">ECG</option>
+                </select>
+              </label>
+            </div>
+
             <div id="patient-status" class="status hidden" aria-live="polite"></div>
 
             <div id="patient-card" class="result-card hidden">
               <h3 id="patient-header">Subject</h3>
               <div id="patient-demographics" class="demographic-grid"></div>
               <div id="patient-records" class="record-groups"></div>
+              <div id="patient-visuals" class="chart-grid patient-visual-grid">
+                <article class="panel chart-card">
+                  <h3>Timeline</h3>
+                  <canvas id="timeline-chart" height="180"></canvas>
+                </article>
+                <article class="panel chart-card">
+                  <h3>Lab results</h3>
+                  <canvas id="lab-chart" height="180"></canvas>
+                </article>
+                <article class="panel chart-card">
+                  <h3>Vital signs</h3>
+                  <canvas id="vital-chart" height="180"></canvas>
+                </article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="graph" class="pane">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Graph</p>
+              <h2>Study graph visualization</h2>
+            </div>
+          </div>
+
+          <div class="panel graph-panel">
+            <div class="graph-toolbar">
+              <div class="graph-search-row">
+                <input id="graph-search" type="text" placeholder="Search subject ID (e.g. S07 or 042-S02-001)" />
+                <button id="graph-search-button" class="primary-button small-button">Search</button>
+                <button id="graph-reset-button" class="secondary-button">Reset</button>
+              </div>
+            </div>
+
+            <div class="graph-status" id="graph-status" aria-live="polite">Loading study graph…</div>
+            <div class="graph-layout">
+              <div id="graph-canvas" class="graph-canvas"></div>
+              <aside id="graph-details" class="graph-details hidden">
+                <h3>Node details</h3>
+                <div id="graph-node-info"></div>
+                <div class="graph-actions">
+                  <button id="graph-open-patient" class="primary-button small-button">Open Patient 360</button>
+                </div>
+              </aside>
+            </div>
+            <div class="graph-legend" id="graph-legend"></div>
+          </div>
+        </section>
+
+        <section id="risk-prediction" class="pane">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Safety</p>
+              <h2>Risk Prediction</h2>
+            </div>
+          </div>
+
+          <div class="panel risk-panel">
+            <div class="input-row compact">
+              <input id="risk-predict-input" type="text" placeholder="Enter subject ID, e.g. 042-S01-001" />
+              <button id="risk-predict-button" class="primary-button">Calculate</button>
+            </div>
+            <div id="risk-predict-status" class="status hidden" aria-live="polite"></div>
+            <div id="risk-predict-card" class="result-card hidden">
+              <div class="result-header">
+                <h3>Risk summary</h3>
+                <span id="risk-score-pill" class="pill">--</span>
+              </div>
+              <div class="risk-score-row">
+                <div class="risk-meter">
+                  <div id="risk-meter-fill" class="risk-meter-fill"></div>
+                </div>
+                <strong id="risk-score-number">0</strong>
+              </div>
+              <p id="risk-summary-text" class="answer-explanation"></p>
+              <ul id="risk-evidence-list" class="evidence-list"></ul>
+            </div>
+          </div>
+        </section>
+
+        <section id="risk-replay" class="pane">
+          <div class="section-header">
+            <div>
+              <p class="eyebrow">Timeline</p>
+              <h2>Risk Replay</h2>
+            </div>
+          </div>
+
+          <div class="panel risk-panel">
+            <div class="input-row compact">
+              <input id="risk-replay-input" type="text" placeholder="Enter subject ID, e.g. 042-S01-001" />
+              <button id="risk-replay-button" class="primary-button">Replay</button>
+            </div>
+            <div id="risk-replay-status" class="status hidden" aria-live="polite"></div>
+            <div id="risk-replay-card" class="result-card hidden">
+              <div class="result-header">
+                <h3>Chronological activity</h3>
+                <span id="risk-replay-count" class="pill">0 events</span>
+              </div>
+              <div id="risk-replay-list" class="timeline-list"></div>
             </div>
           </div>
         </section>
@@ -142,6 +290,8 @@
       </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@10.0.0/dist/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

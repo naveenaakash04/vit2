@@ -46,3 +46,34 @@ def test_missing_patient_is_handled_gracefully():
     assert response.status_code == 200
     data = response.get_json()
     assert data['found'] is False
+
+
+def test_index_page_lists_risk_sections():
+    client = app.test_client()
+    response = client.get('/')
+    assert response.status_code == 200
+    text = response.get_data(as_text=True)
+    assert 'Risk Prediction' in text
+    assert 'Risk Replay' in text
+
+
+def test_risk_prediction_endpoint_uses_real_subject_data():
+    client = app.test_client()
+    response = client.get('/api/risk/predict?subject_id=042-S01-001')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['subject_id'] == '042-S01-001'
+    assert 0 <= data['risk_score'] <= 100
+    assert data['risk_level'] in {'Low', 'Moderate', 'High', 'Critical'}
+    assert data['evidence']
+
+
+def test_risk_replay_endpoint_orders_real_events_by_time():
+    client = app.test_client()
+    response = client.get('/api/risk/replay?subject_id=042-S01-001')
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['subject_id'] == '042-S01-001'
+    assert data['events']
+    dates = [event['date'] for event in data['events']]
+    assert dates == sorted(dates)
